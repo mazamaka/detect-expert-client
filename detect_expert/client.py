@@ -343,14 +343,16 @@ class DetectExpertClient:
         """Parse DNS records from HTML response."""
         records = []
 
-        # Desktop format: num, IP, provider, country, region, city
+        # Desktop format: num, IP, provider, country, region (link), city (link)
+        # Region and city are <a> tags, not <p>
         pattern = (
+            r'd-none d-md-flex justify-content-between gap-24 b4">\s*'
             r'<p>(\d+)</p>\s*'
             r'<p class="flex-1">([^<]+)</p>\s*'
             r'<p class="flex-2">([^<]+)</p>\s*'
             r'<p class="flex-1">([^<]+)</p>\s*'
-            r'<p class="flex-1">([^<]*)</p>\s*'
-            r'<p class="flex-1">([^<]*)</p>'
+            r'<a[^>]*class="[^"]*flex-1"[^>]*>\s*([^<]*)\s*</a>\s*'
+            r'<a[^>]*class="[^"]*flex-1"[^>]*>\s*([^<]*)\s*</a>'
         )
 
         for match in re.finditer(pattern, html):
