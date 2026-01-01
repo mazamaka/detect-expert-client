@@ -46,9 +46,11 @@ def cmd_check(args: argparse.Namespace) -> int:
 
         print(f"\n📤 Starting DNS check for {args.ip}...")
 
-        def on_page(page: int, total: int) -> None:
-            if page % 20 == 0:
-                print(f"   📄 Page {page}: {total} records")
+        def on_page(page: int, total: int, total_pages: Optional[int]) -> None:
+            if total_pages:
+                print(f"\r   📄 Page {page}/{total_pages} | {total} records", end="", flush=True)
+            else:
+                print(f"\r   📄 Page {page} | {total} records", end="", flush=True)
 
         result = client.check_dns(
             args.ip,
@@ -68,6 +70,7 @@ def cmd_check(args: argparse.Namespace) -> int:
                     on_page=on_page,
                 )
             )
+            print()  # New line after progress
 
         print(f"\n✅ Found {result.total_records} DNS records")
         print(f"   URL: {result.url}")
@@ -131,9 +134,11 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
         print(f"📥 Fetching results...")
 
-        def on_page(page: int, total: int) -> None:
-            if page % 20 == 0:
-                print(f"   📄 Page {page}: {total} records")
+        def on_page(page: int, total: int, total_pages: Optional[int]) -> None:
+            if total_pages:
+                print(f"\r   📄 Page {page}/{total_pages} | {total} records", end="", flush=True)
+            else:
+                print(f"\r   📄 Page {page} | {total} records", end="", flush=True)
 
         from .models import CheckResult
 
@@ -152,6 +157,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
                 on_page=on_page,
             )
         )
+        print()  # New line after progress
 
         print(f"\n✅ Found {result.total_records} DNS records")
 

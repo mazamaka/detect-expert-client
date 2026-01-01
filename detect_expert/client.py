@@ -265,10 +265,10 @@ class DetectExpertClient:
         check_id: str,
         session_id: str,
         max_pages: int = 300,
-        delay: float = 0.2,
-        retry_delay: float = 2.0,
-        max_retries: int = 10,
-        on_page: Optional[Callable[[int, int], None]] = None,
+        delay: float = 0.1,
+        retry_delay: float = 1.0,
+        max_retries: int = 15,
+        on_page: Optional[Callable[[int, int, Optional[int]], None]] = None,
     ) -> Iterator[DNSRecord]:
         """
         Fetch DNS check results page by page.
@@ -280,7 +280,7 @@ class DetectExpertClient:
             delay: Delay between requests in seconds
             retry_delay: Delay before retrying pages with 'retry' status
             max_retries: Maximum retries for 'retry' status pages
-            on_page: Callback(page_num, total_records) for progress
+            on_page: Callback(page_num, total_records, total_pages) for progress
 
         Yields:
             DNSRecord objects
@@ -288,16 +288,22 @@ class DetectExpertClient:
         empty_count = 0
         total_records = 0
         retry_count = 0
+        total_pages: Optional[int] = None
 
         for page in range(1, max_pages + 1):
-            records, status = self._fetch_page(check_id, session_id, page)
+            records, status, pages_info = self._fetch_page(check_id, session_id, page)
+
+            # Update total pages (pagination window moves, so update on each page)
+            if pages_info and (total_pages is None or pages_info > total_pages):
+                total_pages = pages_info
 
             # Handle retry status - check is still in progress
-            if status == "retry":
-                if retry_count < max_retries:
-                    retry_count += 1
-                    time.sleep(retry_delay)
-                    records, status = self._fetch_page(check_id, session_id, page)
+            while status == "retry" and retry_count < max_retries:
+                retry_count += 1
+                time.sleep(retry_delay)
+                records, status, pages_info = self._fetch_page(check_id, session_id, page)
+                if pages_info and (total_pages is None or pages_info > total_pages):
+                    total_pages = pages_info
 
             if not records:
                 empty_count += 1
@@ -310,9 +316,13 @@ class DetectExpertClient:
             total_records += len(records)
 
             if on_page:
-                on_page(page, total_records)
+                on_page(page, total_records, total_pages)
 
             yield from records
+
+            # Stop if we reached the last known page
+            if total_pages and page >= total_pages:
+                break
 
             if delay > 0 and page < max_pages:
                 time.sleep(delay)
@@ -322,11 +332,13 @@ class DetectExpertClient:
         check_id: str,
         session_id: str,
         page: int,
-    ) -> tuple[List[DNSRecord], str]:
+    ) -> tuple[List[DNSRecord], str, Optional[int]]:
         """Fetch a single page of results.
 
         Returns:
-            Tuple of (records, status) where status is 'ok', 'retry', or 'error'
+            Tuple of (records, status, total_pages) where:
+            - status is 'ok', 'retry', or 'error'
+            - total_pages is the max page number found in pagination (or None)
         """
         url = f"{self.BASE_URL}/dnscheck/{check_id}/{session_id}?page={page}"
 
@@ -339,26 +351,38 @@ class DetectExpertClient:
             timeout_seconds=self._timeout,
         )
 
-
         if resp.status_code == 429:
             raise RateLimitError("Rate limit exceeded")
 
         if resp.status_code != 200:
-            return [], "error"
+            return [], "error", None
 
         try:
             data = resp.json()
         except json.JSONDecodeError:
-            return [], "error"
+            return [], "error", None
 
         status = data.get("status", "error")
         if status == "retry":
-            return [], "retry"
+            return [], "retry", None
         if status != "ok":
-            return [], status
+            return [], status, None
 
-        records = self._parse_results_html(data.get("html", ""))
-        return records, "ok"
+        html = data.get("html", "")
+        records = self._parse_results_html(html)
+
+        # Extract total pages from pagination
+        total_pages = self._extract_total_pages(html)
+
+        return records, "ok", total_pages
+
+    def _extract_total_pages(self, html: str) -> Optional[int]:
+        """Extract the maximum page number from pagination HTML."""
+        # Find all page numbers in pagination links
+        page_nums = re.findall(r'page=(\d+)', html)
+        if page_nums:
+            return max(int(p) for p in page_nums)
+        return None
 
     def _parse_results_html(self, html: str) -> List[DNSRecord]:
         """Parse DNS records from HTML response."""
