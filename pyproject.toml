@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "detect-expert-client"
+version = "1.0.0"
+description = "Python client for detect.expert DNS checking service with Cloudflare bypass"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "mazamaka", email = "mazamaka603@gmail.com" }
+]
+keywords = [
+    "dns",
+    "dns-check",
+    "detect-expert",
+    "cloudflare-bypass",
+    "tls-fingerprint",
+    "web-scraping",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "tls-client>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+detect-expert = "detect_expert.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/mazamaka/detect-expert-client"
+Repository = "https://github.com/mazamaka/detect-expert-client"
+Issues = "https://github.com/mazamaka/detect-expert-client/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["detect_expert"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
