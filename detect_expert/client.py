@@ -266,6 +266,8 @@ class DetectExpertClient:
         session_id: str,
         max_pages: int = 300,
         delay: float = 0.2,
+        retry_delay: float = 2.0,
+        max_retries: int = 10,
         on_page: Optional[Callable[[int, int], None]] = None,
     ) -> Iterator[DNSRecord]:
         """
@@ -276,6 +278,8 @@ class DetectExpertClient:
             session_id: Session ID
             max_pages: Maximum pages to fetch
             delay: Delay between requests in seconds
+            retry_delay: Delay before retrying pages with 'retry' status
+            max_retries: Maximum retries for 'retry' status pages
             on_page: Callback(page_num, total_records) for progress
 
         Yields:
@@ -283,18 +287,26 @@ class DetectExpertClient:
         """
         empty_count = 0
         total_records = 0
+        retry_count = 0
 
         for page in range(1, max_pages + 1):
-            records = self._fetch_page(check_id, session_id, page)
+            records, status = self._fetch_page(check_id, session_id, page)
+
+            # Handle retry status - check is still in progress
+            if status == "retry":
+                if retry_count < max_retries:
+                    retry_count += 1
+                    time.sleep(retry_delay)
+                    records, status = self._fetch_page(check_id, session_id, page)
 
             if not records:
                 empty_count += 1
                 if empty_count >= 3:
-                    logger.debug(f"No more results after page {page}")
                     break
                 continue
 
             empty_count = 0
+            retry_count = 0  # Reset retry count on success
             total_records += len(records)
 
             if on_page:
@@ -310,8 +322,12 @@ class DetectExpertClient:
         check_id: str,
         session_id: str,
         page: int,
-    ) -> List[DNSRecord]:
-        """Fetch a single page of results."""
+    ) -> tuple[List[DNSRecord], str]:
+        """Fetch a single page of results.
+
+        Returns:
+            Tuple of (records, status) where status is 'ok', 'retry', or 'error'
+        """
         url = f"{self.BASE_URL}/dnscheck/{check_id}/{session_id}?page={page}"
 
         resp = self._session.get(
@@ -323,21 +339,26 @@ class DetectExpertClient:
             timeout_seconds=self._timeout,
         )
 
+
         if resp.status_code == 429:
             raise RateLimitError("Rate limit exceeded")
 
         if resp.status_code != 200:
-            return []
+            return [], "error"
 
         try:
             data = resp.json()
         except json.JSONDecodeError:
-            return []
+            return [], "error"
 
-        if data.get("status") != "ok":
-            return []
+        status = data.get("status", "error")
+        if status == "retry":
+            return [], "retry"
+        if status != "ok":
+            return [], status
 
-        return self._parse_results_html(data.get("html", ""))
+        records = self._parse_results_html(data.get("html", ""))
+        return records, "ok"
 
     def _parse_results_html(self, html: str) -> List[DNSRecord]:
         """Parse DNS records from HTML response."""
