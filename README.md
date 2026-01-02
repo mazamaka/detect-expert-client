@@ -1,11 +1,14 @@
 # Detect Expert DNS Check Client
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/docker/v/mazamaka/detect-expert-client?label=docker&color=blue)](https://hub.docker.com/r/mazamaka/detect-expert-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Python client for [detect.expert](https://detect.expert) DNS checking service.
 
 **Key feature:** Bypasses Cloudflare protection using TLS fingerprinting — no browser required!
+
+> Works where `requests` and `httpx` fail — passes Cloudflare's bot detection by impersonating Chrome's TLS handshake.
 
 ## Features
 
@@ -27,6 +30,37 @@ Or install from source:
 git clone https://github.com/mazamaka/detect-expert-client.git
 cd detect-expert-client
 pip install -e .
+```
+
+## Docker
+
+Pull and run with Docker — no Python installation needed:
+
+```bash
+# Pull latest image
+docker pull mazamaka/detect-expert-client:latest
+
+# Run DNS check
+docker run --rm mazamaka/detect-expert-client \
+  -e your@email.com -p your_password \
+  check 8.8.8.8
+
+# Save results to local file
+docker run --rm -v $(pwd):/data mazamaka/detect-expert-client \
+  -e your@email.com -p your_password \
+  check 8.8.8.8 -o /data/results.json
+
+# View check history
+docker run --rm mazamaka/detect-expert-client \
+  -e your@email.com -p your_password \
+  history
+```
+
+Build from source:
+
+```bash
+docker build -t detect-expert-client .
+docker run --rm detect-expert-client --help
 ```
 
 ## Quick Start
@@ -230,13 +264,28 @@ detect-expert history
 
 ## How It Works
 
-1. **TLS Fingerprinting**: Uses [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) to impersonate Chrome's TLS handshake, bypassing Cloudflare's bot detection
-2. **Session Management**: Maintains authenticated session with CSRF token handling
-3. **Smart Pagination**: Automatically retries pages that are still processing, with progress tracking
+### Why This Works
+
+Standard HTTP libraries (`requests`, `httpx`, `aiohttp`) fail against Cloudflare because their TLS fingerprint doesn't match any known browser. Cloudflare blocks them with 403/503 errors.
+
+This client uses [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) which:
+- Impersonates Chrome's exact TLS handshake (cipher suites, extensions, ALPN)
+- Passes Cloudflare's JA3/JA4 fingerprint checks
+- No Selenium, Playwright, or browser automation needed
 
 ```
-[Python Client] --Chrome TLS--> [Cloudflare] ✅ Pass --> [detect.expert]
+requests/httpx ────────────> [Cloudflare] ❌ 403 Forbidden
+
+detect-expert-client ──────> [Cloudflare] ✅ Pass ──> [detect.expert]
+    └── Chrome TLS fingerprint
 ```
+
+### Technical Details
+
+1. **TLS Fingerprinting**: Impersonates `chrome_131` TLS profile
+2. **CSRF Handling**: Extracts tokens from forms and cookies for Django backend
+3. **Smart Pagination**: Retries pages returning "retry" status (check still processing)
+4. **Progress Tracking**: Detects total pages from pagination links
 
 ## Requirements
 
@@ -244,9 +293,25 @@ detect-expert history
 - [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) >= 1.0.0
 - detect.expert account with balance
 
+## What is DNS Check?
+
+DNS check on detect.expert shows all DNS resolvers that have queried your IP address. This reveals:
+
+- **VPN/Proxy detection** — If DNS requests come from different IPs than the connection IP
+- **ISP information** — Provider names, geographic locations of DNS servers
+- **DNS leak detection** — Shows if your real DNS servers are exposed
+
+The service sends a unique DNS query to your IP and logs all resolvers that look it up.
+
 ## Pricing
 
 Each DNS check costs **$0.15** on detect.expert. Fetching existing results is free.
+
+## Links
+
+- **PyPI**: [detect-expert-client](https://pypi.org/project/detect-expert-client/) (coming soon)
+- **Docker Hub**: [mazamaka/detect-expert-client](https://hub.docker.com/r/mazamaka/detect-expert-client)
+- **GitHub**: [mazamaka/detect-expert-client](https://github.com/mazamaka/detect-expert-client)
 
 ## License
 
@@ -254,4 +319,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ## Disclaimer
 
-This tool is for educational and authorized testing purposes only. Make sure you comply with detect.expert's Terms of Service.
+This tool is for educational and authorized testing purposes only. The author is not responsible for any misuse. Make sure you comply with detect.expert's Terms of Service.
