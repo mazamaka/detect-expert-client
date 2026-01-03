@@ -1,5 +1,6 @@
 # Detect Expert DNS Check Client
 
+[![PyPI](https://img.shields.io/pypi/v/detect-expert-client?color=blue)](https://pypi.org/project/detect-expert-client/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/docker/v/mazamaka/detect-expert-client?label=docker&color=blue)](https://hub.docker.com/r/mazamaka/detect-expert-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -309,7 +310,7 @@ Each DNS check costs **$0.15** on detect.expert. Fetching existing results is fr
 
 ## Links
 
-- **PyPI**: [detect-expert-client](https://pypi.org/project/detect-expert-client/) (coming soon)
+- **PyPI**: [detect-expert-client](https://pypi.org/project/detect-expert-client/)
 - **Docker Hub**: [mazamaka/detect-expert-client](https://hub.docker.com/r/mazamaka/detect-expert-client)
 - **GitHub**: [mazamaka/detect-expert-client](https://github.com/mazamaka/detect-expert-client)
 
