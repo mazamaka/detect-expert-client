@@ -43,17 +43,17 @@ docker pull mazamaka/detect-expert-client:latest
 
 # Run DNS check
 docker run --rm mazamaka/detect-expert-client \
-  -e your@email.com -p your_password \
+  -e &lt;your_email&gt; -p &lt;your_password&gt; \
   check 8.8.8.8
 
 # Save results to local file
 docker run --rm -v $(pwd):/data mazamaka/detect-expert-client \
-  -e your@email.com -p your_password \
+  -e &lt;your_email&gt; -p &lt;your_password&gt; \
   check 8.8.8.8 -o /data/results.json
 
 # View check history
 docker run --rm mazamaka/detect-expert-client \
-  -e your@email.com -p your_password \
+  -e &lt;your_email&gt; -p &lt;your_password&gt; \
   history
 ```
 
@@ -69,8 +69,8 @@ docker run --rm detect-expert-client --help
 ### Set Credentials
 
 ```bash
-export DETECT_EXPERT_EMAIL="your@email.com"
-export DETECT_EXPERT_PASSWORD="your_password"
+export DETECT_EXPERT_EMAIL="&lt;your_email&gt;"
+export DETECT_EXPERT_PASSWORD="&lt;your_password&gt;"
 ```
 
 ### Run New DNS Check (All Pages)
@@ -178,7 +178,7 @@ from detect_expert import DetectExpertClient
 
 # Create client and login
 client = DetectExpertClient()
-client.login("your@email.com", "your_password")
+client.login("&lt;your_email&gt;", "&lt;your_password&gt;")
 
 # Run DNS check (fetches all pages)
 result = client.check_dns("8.8.8.8")
