@@ -2,13 +2,13 @@
 
 import argparse
 import json
-import sys
-import os
 import logging
-from typing import Optional
+import os
+import sys
 
 from .client import DetectExpertClient
 from .exceptions import DetectExpertError
+from .models import CheckResult
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -27,7 +27,10 @@ def get_credentials(args: argparse.Namespace) -> tuple[str, str]:
 
     if not email or not password:
         print("Error: Email and password required.", file=sys.stderr)
-        print("Use --email/--password or set DETECT_EXPERT_EMAIL/DETECT_EXPERT_PASSWORD", file=sys.stderr)
+        print(
+            "Use --email/--password or set DETECT_EXPERT_EMAIL/DETECT_EXPERT_PASSWORD",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     return email, password
@@ -46,9 +49,13 @@ def cmd_check(args: argparse.Namespace) -> int:
 
         print(f"\n📤 Starting DNS check for {args.ip}...")
 
-        def on_page(page: int, total: int, total_pages: Optional[int]) -> None:
+        def on_page(page: int, total: int, total_pages: int | None) -> None:
             if total_pages:
-                print(f"\r   📄 Page {page}/{total_pages} | {total} records", end="", flush=True)
+                print(
+                    f"\r   📄 Page {page}/{total_pages} | {total} records",
+                    end="",
+                    flush=True,
+                )
             else:
                 print(f"\r   📄 Page {page} | {total} records", end="", flush=True)
 
@@ -88,7 +95,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 
         # Show sample
         if not args.quiet and result.records:
-            print(f"\n📋 Sample records:")
+            print("\n📋 Sample records:")
             for record in result.records[:10]:
                 print(f"   {record.ip} - {record.provider}")
             if result.total_records > 10:
@@ -132,15 +139,17 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     try:
         client.login(email, password)
 
-        print(f"📥 Fetching results...")
+        print("📥 Fetching results...")
 
-        def on_page(page: int, total: int, total_pages: Optional[int]) -> None:
+        def on_page(page: int, total: int, total_pages: int | None) -> None:
             if total_pages:
-                print(f"\r   📄 Page {page}/{total_pages} | {total} records", end="", flush=True)
+                print(
+                    f"\r   📄 Page {page}/{total_pages} | {total} records",
+                    end="",
+                    flush=True,
+                )
             else:
                 print(f"\r   📄 Page {page} | {total} records", end="", flush=True)
-
-        from .models import CheckResult
 
         result = CheckResult(
             check_id=args.check_id,
@@ -172,7 +181,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         return 1
 
 
-def save_results(result, output: str, fmt: str) -> None:
+def save_results(result: "CheckResult", output: str, fmt: str) -> None:
     """Save results to file."""
     if fmt == "json" or output.endswith(".json"):
         with open(output, "w", encoding="utf-8") as f:
@@ -196,7 +205,8 @@ def main() -> int:
         description="Detect Expert DNS Check Client",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
@@ -204,11 +214,13 @@ def main() -> int:
     # Auth options
     auth_group = parser.add_argument_group("Authentication")
     auth_group.add_argument(
-        "-e", "--email",
+        "-e",
+        "--email",
         help="Account email (or DETECT_EXPERT_EMAIL env)",
     )
     auth_group.add_argument(
-        "-p", "--password",
+        "-p",
+        "--password",
         help="Account password (or DETECT_EXPERT_PASSWORD env)",
     )
 
@@ -218,11 +230,13 @@ def main() -> int:
     check_parser = subparsers.add_parser("check", help="Run DNS check")
     check_parser.add_argument("ip", help="IP address to check")
     check_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output file (json/txt/csv)",
     )
     check_parser.add_argument(
-        "-f", "--format",
+        "-f",
+        "--format",
         choices=["json", "ips", "csv"],
         default="json",
         help="Output format",
@@ -246,7 +260,8 @@ def main() -> int:
         help="Delay between requests (default: 0.2)",
     )
     check_parser.add_argument(
-        "-q", "--quiet",
+        "-q",
+        "--quiet",
         action="store_true",
         help="Quiet mode",
     )
@@ -255,7 +270,8 @@ def main() -> int:
     # History command
     history_parser = subparsers.add_parser("history", help="Show check history")
     history_parser.add_argument(
-        "-l", "--limit",
+        "-l",
+        "--limit",
         type=int,
         default=10,
         help="Max items (default: 10)",
@@ -267,11 +283,13 @@ def main() -> int:
     fetch_parser.add_argument("check_id", help="Check ID")
     fetch_parser.add_argument("session_id", help="Session ID")
     fetch_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output file",
     )
     fetch_parser.add_argument(
-        "-f", "--format",
+        "-f",
+        "--format",
         choices=["json", "ips", "csv"],
         default="json",
         help="Output format",

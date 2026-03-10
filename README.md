@@ -4,142 +4,220 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/docker/v/mazamaka/detect-expert-client?label=docker&color=blue)](https://hub.docker.com/r/mazamaka/detect-expert-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-Python client for [detect.expert](https://detect.expert) DNS checking service.
+Python client for [detect.expert](https://detect.expert) DNS checking service with **Cloudflare bypass** via TLS fingerprinting.
 
-**Key feature:** Bypasses Cloudflare protection using TLS fingerprinting — no browser required!
+> Standard HTTP libraries (requests, httpx, aiohttp) get blocked by Cloudflare with 403/503 errors.
+> This client impersonates Chrome TLS handshake to pass JA3/JA4 fingerprint checks -- no browser automation needed.
 
-> Works where `requests` and `httpx` fail — passes Cloudflare's bot detection by impersonating Chrome's TLS handshake.
+## How TLS Fingerprinting Works
+
+When a client establishes an HTTPS connection, the TLS handshake reveals a unique fingerprint (JA3/JA4) based on:
+- Cipher suites offered
+- TLS extensions and their order
+- Supported curves and point formats
+- ALPN protocols
+
+Cloudflare uses this fingerprint to distinguish real browsers from bots. Standard Python HTTP libraries have a recognizable non-browser fingerprint and get blocked.
+
+This client uses [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) (Go library with Python bindings) to produce a TLS fingerprint **identical to Chrome 131**, making requests indistinguishable from a real browser at the network level.
+
+```
+requests/httpx ------> [Cloudflare] BLOCKED (bot TLS fingerprint)
+
+detect-expert -------> [Cloudflare] PASS -----> [detect.expert]
+  (Chrome TLS)
+```
 
 ## Features
 
-- **Cloudflare Bypass** — Uses [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) to impersonate Chrome TLS fingerprint
-- **Fast Pagination** — Fetches all pages with progress indicator and smart retry logic
-- **Full Data** — Extracts IP, provider, country, region, and city
-- **CLI Tool** — Command-line interface with real-time progress
-- **Export** — JSON, CSV, or plain IP list
+- **Cloudflare Bypass** -- Chrome TLS fingerprint via [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client)
+- **Smart Pagination** -- auto-fetches all pages with retry logic for pending results
+- **Full Data** -- IP, provider, country, region, city for each DNS resolver
+- **CLI Tool** -- command-line interface with real-time progress
+- **Export** -- JSON, CSV, or plain IP list
+- **Docker** -- ready-to-use container image
 
-## Installation
+## Quick Start
+
+### Install
 
 ```bash
 pip install detect-expert-client
 ```
 
-Or install from source:
-
-```bash
-git clone https://github.com/mazamaka/detect-expert-client.git
-cd detect-expert-client
-pip install -e .
-```
-
-## Docker
-
-Pull and run with Docker — no Python installation needed:
-
-```bash
-# Pull latest image
-docker pull mazamaka/detect-expert-client:latest
-
-# Run DNS check
-docker run --rm mazamaka/detect-expert-client \
-  -e &lt;your_email&gt; -p &lt;your_password&gt; \
-  check 8.8.8.8
-
-# Save results to local file
-docker run --rm -v $(pwd):/data mazamaka/detect-expert-client \
-  -e &lt;your_email&gt; -p &lt;your_password&gt; \
-  check 8.8.8.8 -o /data/results.json
-
-# View check history
-docker run --rm mazamaka/detect-expert-client \
-  -e &lt;your_email&gt; -p &lt;your_password&gt; \
-  history
-```
-
-Build from source:
-
-```bash
-docker build -t detect-expert-client .
-docker run --rm detect-expert-client --help
-```
-
-## Quick Start
-
 ### Set Credentials
 
 ```bash
-export DETECT_EXPERT_EMAIL="&lt;your_email&gt;"
-export DETECT_EXPERT_PASSWORD="&lt;your_password&gt;"
+export DETECT_EXPERT_EMAIL="your@email.com"
+export DETECT_EXPERT_PASSWORD="your_password"
 ```
 
-### Run New DNS Check (All Pages)
+### Run DNS Check
 
 ```bash
-# Full check - fetches ALL pages automatically
+# Full check -- fetches ALL pages automatically
 detect-expert check 8.8.8.8 -o results.json
 
-# With longer wait for large checks
-detect-expert check 8.8.8.8 -o results.json --wait 10
-```
+# Quick preview -- first page only
+detect-expert check 8.8.8.8 --max-pages 1
 
-### Fetch Only First Page (Quick Preview)
-
-```bash
-# Only first 100 records
-detect-expert check 8.8.8.8 --max-pages 1 -o preview.json
-```
-
-### Fetch Existing Check Results
-
-```bash
-# Re-download results from previous check (no cost)
-detect-expert fetch <check_id> <session_id> -o results.json
-
-# Example:
-detect-expert fetch cddec0733d6d4c9cb5f121483101435e 90ccc3317d6641b3ae17031211b7f5f2 -o results.json
-```
-
-### Other Commands
-
-```bash
-# View check history
-detect-expert history
-
-# Export as IP list only
+# Export as IP list
 detect-expert check 1.1.1.1 -o ips.txt -f ips
 
 # Export as CSV
 detect-expert check 1.1.1.1 -o data.csv -f csv
 ```
 
-## Example Output
+### Re-download Existing Results (Free)
 
-```
-$ detect-expert check 8.8.8.8 -o results.json
-
-🔐 Logging in as user@example.com...
-✅ Authenticated. Balance: $49.25
-
-📤 Starting DNS check for 8.8.8.8...
-   📄 Page 15/21 | 1500 records
-
-✅ Found 2099 DNS records
-   URL: https://detect.expert/dnscheck/abc123/def456
-
-📊 Top providers:
-   Google LLC: 2099
-
-📋 Sample records:
-   8.8.8.8 - Google LLC
-   8.8.4.4 - Google LLC
-   35.186.235.154 - Google LLC
-   ... and 2089 more
-
-💾 Saved to results.json
+```bash
+detect-expert fetch <check_id> <session_id> -o results.json
 ```
 
-## JSON Output Structure
+### View History
+
+```bash
+detect-expert history
+```
+
+## Python API
+
+```python
+from detect_expert import DetectExpertClient
+
+client = DetectExpertClient()
+client.login("your@email.com", "your_password")
+
+# Run DNS check (auto-fetches all pages)
+result = client.check_dns("8.8.8.8")
+
+for record in result.records[:5]:
+    pass  # record.ip, record.provider, record.city
+```
+
+### Progress Callback
+
+```python
+def on_progress(page: int, total_records: int, total_pages: int | None):
+    pass  # page, total_pages, total_records
+
+records = list(client.fetch_results(
+    check_id="abc123",
+    session_id="def456",
+    on_page=on_progress,
+))
+```
+
+### Error Handling
+
+```python
+from detect_expert import (
+    DetectExpertClient,
+    AuthenticationError,
+    InsufficientFundsError,
+    RateLimitError,
+    CheckError,
+)
+
+client = DetectExpertClient()
+
+try:
+    client.login("your@email.com", "your_password")
+    result = client.check_dns("8.8.8.8")
+except AuthenticationError:
+    ...
+except InsufficientFundsError:
+    ...  # each check costs $0.15
+except RateLimitError:
+    ...  # too many requests
+except CheckError as e:
+    ...  # check failed
+```
+
+## API Reference
+
+### ```DetectExpertClient(browser, timeout)```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| ```browser``` | ```str``` | ```"chrome_131"``` | TLS profile to impersonate |
+| ```timeout``` | ```int``` | ```30``` | Request timeout in seconds |
+
+### ```client.login(email, password) -> AccountInfo```
+
+Authenticates with detect.expert. Returns ```AccountInfo``` with ```email```, ```balance```, ```is_authenticated```.
+
+### ```client.check_dns(ip_address, ...) -> CheckResult```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| ```ip_address``` | ```str``` | *required* | IPv4 or IPv6 address |
+| ```wait_seconds``` | ```float``` | ```3.0``` | Wait before fetching results |
+| ```fetch_results``` | ```bool``` | ```True``` | Auto-fetch results |
+| ```max_pages``` | ```int``` | ```300``` | Max pages to fetch |
+| ```page_delay``` | ```float``` | ```0.2``` | Delay between pages (seconds) |
+
+### ```client.fetch_results(check_id, session_id, ...) -> Iterator[DNSRecord]```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| ```check_id``` | ```str``` | *required* | Check ID |
+| ```session_id``` | ```str``` | *required* | Session ID |
+| ```max_pages``` | ```int``` | ```300``` | Max pages to fetch |
+| ```delay``` | ```float``` | ```0.1``` | Delay between pages (seconds) |
+| ```retry_delay``` | ```float``` | ```1.0``` | Retry delay for pending pages |
+| ```max_retries``` | ```int``` | ```15``` | Max retries per page |
+| ```on_page``` | ```Callable``` | ```None``` | Progress callback |
+
+### ```client.get_history(limit=10) -> list[dict]```
+
+Returns list of ```{"check_id": ..., "session_id": ...}``` dicts.
+
+### Data Models
+
+**```CheckResult```** -- DNS check result:
+- ```check_id```, ```session_id```, ```ip_checked```, ```url```
+- ```records: list[DNSRecord]```
+- ```total_records```, ```unique_ips```, ```providers``` (stats dict)
+- ```to_dict()```, ```to_ip_list()```
+
+**```DNSRecord```** -- single DNS resolver record:
+- ```ip```, ```provider```, ```country```, ```region```, ```city```
+- ```to_dict()```
+
+## CLI Reference
+
+```
+detect-expert [-e EMAIL] [-p PASSWORD] [-v] COMMAND
+
+Commands:
+  check <IP>                          Run DNS check ($0.15)
+  fetch <CHECK_ID> <SESSION_ID>       Fetch existing results (free)
+  history                             View check history
+
+check options:
+  -o, --output FILE       Save results to file
+  -f, --format FORMAT     json | ips | csv (default: json)
+  --wait SECONDS          Wait after check start (default: 3)
+  --max-pages N           Max pages to fetch (default: 300)
+  --delay SECONDS         Delay between requests (default: 0.2)
+  -q, --quiet             Suppress sample output
+
+fetch options:
+  -o, --output FILE       Save results to file
+  -f, --format FORMAT     json | ips | csv (default: json)
+  --max-pages N           Max pages to fetch (default: 300)
+  --delay SECONDS         Delay between requests (default: 0.2)
+
+history options:
+  -l, --limit N           Max items to show (default: 10)
+```
+
+## Output Formats
+
+### JSON
 
 ```json
 {
@@ -155,138 +233,55 @@ $ detect-expert check 8.8.8.8 -o results.json
       "country": "United States",
       "region": "CA",
       "city": "Mountain View"
-    },
-    {
-      "ip": "35.186.235.154",
-      "provider": "Google LLC",
-      "country": "United States",
-      "region": "MO",
-      "city": "Kansas City"
     }
   ],
-  "providers": {
-    "Google LLC": 2099
-  },
-  "created_at": "2025-01-01T23:30:00.000000"
+  "providers": {"Google LLC": 2099},
+  "created_at": "2025-01-01T23:30:00+00:00"
 }
 ```
 
-## Python API
-
-```python
-from detect_expert import DetectExpertClient
-
-# Create client and login
-client = DetectExpertClient()
-client.login("&lt;your_email&gt;", "&lt;your_password&gt;")
-
-# Run DNS check (fetches all pages)
-result = client.check_dns("8.8.8.8")
-
-print(f"Total DNS records: {result.total_records}")
-print(f"Unique IPs: {len(result.unique_ips)}")
-
-for record in result.records[:5]:
-    print(f"{record.ip} | {record.provider} | {record.city}, {record.region}")
-```
-
-### Fetch with Progress Callback
-
-```python
-def on_progress(page: int, total_records: int, total_pages: int | None):
-    if total_pages:
-        print(f"Page {page}/{total_pages}: {total_records} records")
-    else:
-        print(f"Page {page}: {total_records} records")
-
-# Fetch results with progress
-records = list(client.fetch_results(
-    check_id="abc123",
-    session_id="def456",
-    on_page=on_progress,
-))
-```
-
-### API Reference
-
-| Method | Description |
-|--------|-------------|
-| `login(email, password)` | Authenticate with detect.expert |
-| `check_dns(ip, ...)` | Run DNS check for IP address |
-| `fetch_results(check_id, session_id, ...)` | Fetch results from existing check |
-| `get_history(limit=10)` | Get check history |
-
-#### check_dns() Parameters
-
-```python
-result = client.check_dns(
-    ip_address="8.8.8.8",   # IP to check
-    wait_seconds=3.0,       # Wait before fetching (default: 3)
-    fetch_results=True,     # Auto-fetch results (default: True)
-    max_pages=300,          # Max pages to fetch (default: 300)
-    page_delay=0.1,         # Delay between pages (default: 0.1)
-)
-```
-
-#### fetch_results() Parameters
-
-```python
-records = client.fetch_results(
-    check_id="abc123",
-    session_id="def456",
-    max_pages=300,          # Max pages (default: 300)
-    delay=0.1,              # Delay between pages (default: 0.1)
-    retry_delay=1.0,        # Retry delay for pending pages (default: 1.0)
-    max_retries=15,         # Max retries per page (default: 15)
-    on_page=callback,       # Progress callback (optional)
-)
-```
-
-## CLI Options
+### IP List (```-f ips```)
 
 ```
-detect-expert check <IP> [OPTIONS]
-  -o, --output FILE     Save results to file
-  -f, --format FORMAT   Output format: json, ips, csv (default: json)
-  --wait SECONDS        Wait time after check (default: 3)
-  --max-pages N         Max pages to fetch (default: 300)
-  --delay SECONDS       Delay between requests (default: 0.1)
-  -q, --quiet           Quiet mode
-
-detect-expert fetch <CHECK_ID> <SESSION_ID> [OPTIONS]
-  -o, --output FILE     Save results to file
-  -f, --format FORMAT   Output format: json, ips, csv
-  --max-pages N         Max pages to fetch
-  --delay SECONDS       Delay between requests
-
-detect-expert history
-  -l, --limit N         Max items to show (default: 10)
+8.8.8.8
+8.8.4.4
+35.186.235.154
 ```
 
-## How It Works
+### CSV (```-f csv```)
 
-### Why This Works
-
-Standard HTTP libraries (`requests`, `httpx`, `aiohttp`) fail against Cloudflare because their TLS fingerprint doesn't match any known browser. Cloudflare blocks them with 403/503 errors.
-
-This client uses [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) which:
-- Impersonates Chrome's exact TLS handshake (cipher suites, extensions, ALPN)
-- Passes Cloudflare's JA3/JA4 fingerprint checks
-- No Selenium, Playwright, or browser automation needed
-
-```
-requests/httpx ────────────> [Cloudflare] ❌ 403 Forbidden
-
-detect-expert-client ──────> [Cloudflare] ✅ Pass ──> [detect.expert]
-    └── Chrome TLS fingerprint
+```csv
+ip,provider,country,region,city
+8.8.8.8,Google LLC,United States,CA,Mountain View
 ```
 
-### Technical Details
+## Docker
 
-1. **TLS Fingerprinting**: Impersonates `chrome_131` TLS profile
-2. **CSRF Handling**: Extracts tokens from forms and cookies for Django backend
-3. **Smart Pagination**: Retries pages returning "retry" status (check still processing)
-4. **Progress Tracking**: Detects total pages from pagination links
+```bash
+# Pull and run
+docker pull mazamaka/detect-expert-client:latest
+
+docker run --rm \
+  -e DETECT_EXPERT_EMAIL=your@email.com \
+  -e DETECT_EXPERT_PASSWORD=your_password \
+  mazamaka/detect-expert-client check 8.8.8.8
+
+# Save results to host
+docker run --rm -v $(pwd):/data \
+  -e DETECT_EXPERT_EMAIL=your@email.com \
+  -e DETECT_EXPERT_PASSWORD=your_password \
+  mazamaka/detect-expert-client check 8.8.8.8 -o /data/results.json
+```
+
+## What is DNS Check?
+
+DNS check on detect.expert shows all DNS resolvers that have queried your IP address. This reveals:
+
+- **VPN/Proxy detection** -- DNS requests from different IPs than the connection IP
+- **ISP information** -- provider names, geographic locations of DNS servers
+- **DNS leak detection** -- real DNS servers exposed despite VPN/proxy usage
+
+The service sends a unique DNS query to your IP and logs all resolvers that look it up. Each check costs **$0.15**. Fetching existing results is free.
 
 ## Requirements
 
@@ -294,30 +289,22 @@ detect-expert-client ──────> [Cloudflare] ✅ Pass ──> [detect.e
 - [tls-client](https://github.com/FlorianREGAZ/Python-Tls-Client) >= 1.0.0
 - detect.expert account with balance
 
-## What is DNS Check?
-
-DNS check on detect.expert shows all DNS resolvers that have queried your IP address. This reveals:
-
-- **VPN/Proxy detection** — If DNS requests come from different IPs than the connection IP
-- **ISP information** — Provider names, geographic locations of DNS servers
-- **DNS leak detection** — Shows if your real DNS servers are exposed
-
-The service sends a unique DNS query to your IP and logs all resolvers that look it up.
-
-## Pricing
-
-Each DNS check costs **$0.15** on detect.expert. Fetching existing results is free.
-
 ## Links
 
 - **PyPI**: [detect-expert-client](https://pypi.org/project/detect-expert-client/)
 - **Docker Hub**: [mazamaka/detect-expert-client](https://hub.docker.com/r/mazamaka/detect-expert-client)
 - **GitHub**: [mazamaka/detect-expert-client](https://github.com/mazamaka/detect-expert-client)
 
+## Author
+
+**Maksym Babenko**
+- GitHub: [@mazamaka](https://github.com/mazamaka)
+- Telegram: [@Mazamaka](https://t.me/Mazamaka)
+
 ## License
 
-MIT License - see [LICENSE](LICENSE) file.
+MIT License -- see [LICENSE](LICENSE) file.
 
 ## Disclaimer
 
-This tool is for educational and authorized testing purposes only. The author is not responsible for any misuse. Make sure you comply with detect.expert's Terms of Service.
+This tool is for educational and authorized testing purposes only. The author is not responsible for any misuse. Make sure you comply with detect.expert Terms of Service.

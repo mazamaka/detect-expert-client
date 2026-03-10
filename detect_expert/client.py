@@ -5,26 +5,26 @@ This client bypasses Cloudflare protection using TLS fingerprinting
 via the tls-client library.
 """
 
-import re
 import json
-import time
 import logging
-from typing import Optional, List, Iterator, Callable
+import re
+import time
+from collections.abc import Callable, Iterator
 
 try:
     import tls_client
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "tls-client is required. Install it with: pip install tls-client"
-    )
+    ) from err
 
-from .models import DNSRecord, CheckResult, AccountInfo
 from .exceptions import (
     AuthenticationError,
-    InsufficientFundsError,
     CheckError,
+    InsufficientFundsError,
     RateLimitError,
 )
+from .models import AccountInfo, CheckResult, DNSRecord
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class DetectExpertClient:
         self,
         browser: str = DEFAULT_BROWSER,
         timeout: int = 30,
-    ):
+    ) -> None:
         """
         Initialize the client.
 
@@ -73,7 +73,7 @@ class DetectExpertClient:
         return self._account.is_authenticated
 
     @property
-    def balance(self) -> Optional[float]:
+    def balance(self) -> float | None:
         """Get current account balance."""
         return self._account.balance
 
@@ -91,7 +91,7 @@ class DetectExpertClient:
         Raises:
             AuthenticationError: If login fails
         """
-        logger.info(f"Authenticating as {email}")
+        logger.info("Authenticating as %s", email)
 
         # Get CSRF token
         resp = self._session.get(
@@ -135,7 +135,7 @@ class DetectExpertClient:
         # Get balance
         self._update_balance()
 
-        logger.info(f"Authenticated successfully. Balance: ${self._account.balance}")
+        logger.info("Authenticated successfully. Balance: %s", self._account.balance)
         return self._account
 
     def _update_balance(self) -> None:
@@ -185,7 +185,7 @@ class DetectExpertClient:
         if not self.is_authenticated:
             raise AuthenticationError("Not authenticated. Call login() first.")
 
-        logger.info(f"Starting DNS check for {ip_address}")
+        logger.info("Starting DNS check for %s", ip_address)
 
         csrf_token = self._get_csrf_token()
 
@@ -207,8 +207,8 @@ class DetectExpertClient:
 
         try:
             data = resp.json()
-        except json.JSONDecodeError:
-            raise CheckError("Invalid server response")
+        except json.JSONDecodeError as err:
+            raise CheckError("Invalid server response") from err
 
         if data.get("status") == "error":
             code = data.get("code", "")
@@ -233,7 +233,7 @@ class DetectExpertClient:
         check_id = match.group(1)
         session_id = match.group(2)
 
-        logger.info(f"Check started: {check_id}")
+        logger.info("Check started: %s", check_id)
 
         result = CheckResult(
             check_id=check_id,
@@ -246,7 +246,7 @@ class DetectExpertClient:
 
         if fetch_results:
             if wait_seconds > 0:
-                logger.debug(f"Waiting {wait_seconds}s for results...")
+                logger.debug("Waiting %ss for results...", wait_seconds)
                 time.sleep(wait_seconds)
 
             result.records = list(
@@ -268,7 +268,7 @@ class DetectExpertClient:
         delay: float = 0.1,
         retry_delay: float = 1.0,
         max_retries: int = 15,
-        on_page: Optional[Callable[[int, int, Optional[int]], None]] = None,
+        on_page: Callable[[int, int, int | None], None] | None = None,
     ) -> Iterator[DNSRecord]:
         """
         Fetch DNS check results page by page.
@@ -288,7 +288,7 @@ class DetectExpertClient:
         empty_count = 0
         total_records = 0
         retry_count = 0
-        total_pages: Optional[int] = None
+        total_pages: int | None = None
 
         for page in range(1, max_pages + 1):
             records, status, pages_info = self._fetch_page(check_id, session_id, page)
@@ -301,7 +301,9 @@ class DetectExpertClient:
             while status == "retry" and retry_count < max_retries:
                 retry_count += 1
                 time.sleep(retry_delay)
-                records, status, pages_info = self._fetch_page(check_id, session_id, page)
+                records, status, pages_info = self._fetch_page(
+                    check_id, session_id, page
+                )
                 if pages_info and (total_pages is None or pages_info > total_pages):
                     total_pages = pages_info
 
@@ -332,7 +334,7 @@ class DetectExpertClient:
         check_id: str,
         session_id: str,
         page: int,
-    ) -> tuple[List[DNSRecord], str, Optional[int]]:
+    ) -> tuple[list[DNSRecord], str, int | None]:
         """Fetch a single page of results.
 
         Returns:
@@ -376,15 +378,15 @@ class DetectExpertClient:
 
         return records, "ok", total_pages
 
-    def _extract_total_pages(self, html: str) -> Optional[int]:
+    def _extract_total_pages(self, html: str) -> int | None:
         """Extract the maximum page number from pagination HTML."""
         # Find all page numbers in pagination links
-        page_nums = re.findall(r'page=(\d+)', html)
+        page_nums = re.findall(r"page=(\d+)", html)
         if page_nums:
             return max(int(p) for p in page_nums)
         return None
 
-    def _parse_results_html(self, html: str) -> List[DNSRecord]:
+    def _parse_results_html(self, html: str) -> list[DNSRecord]:
         """Parse DNS records from HTML response."""
         records = []
 
@@ -392,7 +394,7 @@ class DetectExpertClient:
         # Region and city are <a> tags, not <p>
         pattern = (
             r'd-none d-md-flex justify-content-between gap-24 b4">\s*'
-            r'<p>(\d+)</p>\s*'
+            r"<p>(\d+)</p>\s*"
             r'<p class="flex-1">([^<]+)</p>\s*'
             r'<p class="flex-2">([^<]+)</p>\s*'
             r'<p class="flex-1">([^<]+)</p>\s*'
@@ -419,7 +421,7 @@ class DetectExpertClient:
 
         return records
 
-    def get_history(self, limit: int = 10) -> List[dict]:
+    def get_history(self, limit: int = 10) -> list[dict[str, str]]:
         """
         Get check history.
 
